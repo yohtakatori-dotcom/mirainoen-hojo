@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>未来農園 ダッシュボード</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap');
+:root {
+  --bg:#f4f0e8;--paper:#fffdf7;--earth:#5c3d2e;--moss:#4a7c59;--moss-light:#7ab893;
+  --moss-pale:#d4ead9;--straw:#c8973a;--straw-pale:#fdf0d5;--sky:#5b8fa8;
+  --harvest:#c0453a;--border:#d4c8b0;--text:#3a2e20;--muted:#8a7a62;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Zen Kaku Gothic New',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px 16px 80px;}
+
+.header{text-align:center;padding:24px 0 20px;}
+.header-badge{display:inline-block;background:var(--moss);color:white;font-size:11px;font-weight:700;letter-spacing:.15em;padding:4px 14px;border-radius:20px;margin-bottom:10px;}
+.header h1{font-family:'Kaisei Decol',serif;font-size:24px;color:var(--earth);}
+.meta-row{display:flex;justify-content:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.meta-badge{display:inline-flex;align-items:center;gap:5px;border-radius:8px;padding:3px 12px;font-size:11px;font-weight:700;}
+.badge-update{background:var(--straw-pale);border:1px solid var(--straw);color:var(--straw);}
+.badge-sync{background:var(--moss-pale);border:1px solid var(--moss-light);color:var(--moss);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--moss);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+.tabs{display:flex;gap:6px;margin:18px 0 14px;background:white;border-radius:14px;padding:5px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.tab{flex:1;padding:10px 6px;border-radius:10px;border:none;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;background:transparent;color:var(--muted);line-height:1.4;}
+.tab.active{background:var(--moss);color:white;box-shadow:0 2px 8px rgba(74,124,89,.35);}
+.tab-icon{font-size:16px;display:block;margin-bottom:2px;}
+.panel{display:none;}.panel.active{display:block;}
+
+/* ===== Undo/Redo バー ===== */
+.history-bar{
+  display:flex;align-items:center;gap:8px;
+  background:white;border:1px solid var(--border);
+  border-radius:14px;padding:8px 12px;
+  margin-bottom:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.history-bar-label{font-size:11px;font-weight:700;color:var(--muted);flex:1;}
+.hbtn{
+  display:flex;align-items:center;gap:4px;
+  padding:7px 13px;border-radius:10px;border:1.5px solid var(--border);
+  background:white;font-family:inherit;font-size:12px;font-weight:700;
+  color:var(--earth);cursor:pointer;transition:all .15s;
+}
+.hbtn:active:not(:disabled){transform:scale(.95);}
+.hbtn:disabled{color:#ccc;border-color:#e8e0d0;cursor:not-allowed;background:#faf8f4;}
+.hbtn.undo:not(:disabled){border-color:var(--straw);color:var(--straw);background:var(--straw-pale);}
+.hbtn.redo:not(:disabled){border-color:var(--moss-light);color:var(--moss);background:var(--moss-pale);}
+.history-count{
+  font-size:10px;font-weight:700;color:var(--muted);
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:20px;padding:2px 9px;white-space:nowrap;
+}
+
+/* 履歴ドロワー */
+.history-drawer{
+  background:white;border:1px solid var(--border);border-radius:14px;
+  padding:0;max-height:0;overflow:hidden;
+  transition:max-height .3s ease,padding .3s ease;
+  margin-bottom:12px;
+}
+.history-drawer.open{max-height:260px;padding:12px;}
+.history-drawer-title{font-size:11px;font-weight:900;color:var(--earth);margin-bottom:8px;}
+.history-list{overflow-y:auto;max-height:200px;}
+.history-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;border-radius:9px;cursor:pointer;
+  border:1px solid transparent;font-size:12px;
+  transition:background .15s;margin-bottom:3px;
+}
+.history-item:hover{background:var(--bg);}
+.history-item.current{background:var(--moss-pale);border-color:var(--moss-light);font-weight:700;}
+.history-item.future{color:var(--muted);}
+.history-item-icon{font-size:14px;min-width:20px;text-align:center;}
+.history-item-label{flex:1;line-height:1.4;}
+.history-item-time{font-size:10px;color:var(--muted);}
+
+/* map */
+.map-legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:white;border:1px solid var(--border);border-radius:20px;padding:3px 10px;}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+.farm-map{background:white;border:1px solid var(--border);border-radius:20px;padding:16px;box-shadow:0 3px 16px rgba(0,0,0,.07);}
+.map-title{font-size:13px;font-weight:900;color:var(--earth);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.farm-grid{display:flex;flex-direction:column;gap:8px;}
+.farm-zone{border-radius:14px;padding:14px 12px;cursor:pointer;transition:transform .15s;border:2px solid transparent;}
+.farm-zone:active{transform:scale(.98);}
+.zone-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.zone-name{font-size:14px;font-weight:900;color:var(--earth);display:flex;align-items:center;gap:5px;}
+.status-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
+.status-working{background:#fff3cd;color:#856404;border:1px solid #ffc107;}
+.status-ok{background:#d4edda;color:#155724;border:1px solid #28a745;}
+.status-alert{background:#f8d7da;color:#721c24;border:1px solid #dc3545;}
+.status-prep{background:#d1ecf1;color:#0c5460;border:1px solid #17a2b8;}
+.zone-crops{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
+.crop-tag{font-size:10px;font-weight:700;background:rgba(255,255,255,.7);border-radius:6px;padding:2px 7px;color:var(--earth);}
+.zone-next{font-size:11px;color:var(--muted);line-height:1.5;}
+.zone-next strong{color:var(--earth);}
+.growth-bar{margin-top:8px;height:6px;background:rgba(255,255,255,.5);border-radius:3px;overflow:hidden;}
+.growth-fill{height:100%;border-radius:3px;}
+.growth-label{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:3px;}
+
+/* calendar */
+.calendar-wrap{background:white;border:1px solid var(--border);border-radius:20px;padding:16px;box-shadow:0 3px 16px rgba(0,0,0,.07);margin-bottom:16px;overflow-x:auto;}
+.calendar-title{font-size:13px;font-weight:900;color:var(--earth);margin-bottom:12px;}
+.gantt{min-width:480px;}
+.gantt-header{display:grid;grid-template-columns:88px repeat(12,1fr);gap:2px;margin-bottom:4px;}
+.gantt-month{font-size:10px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0;}
+.gantt-month.current{background:var(--moss-pale);border-radius:6px;color:var(--moss);}
+.gantt-row{display:grid;grid-template-columns:88px repeat(12,1fr);gap:2px;margin-bottom:3px;align-items:center;}
+.gantt-label{font-size:11px;font-weight:700;color:var(--earth);padding-right:4px;display:flex;align-items:center;gap:3px;}
+.gantt-cell{height:24px;border-radius:4px;background:#f5f0e8;}
+.section-label{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--muted);margin:12px 0 4px;}
+.gantt-legend{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;}
+.gantt-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
+.gantt-legend-bar{width:20px;height:10px;border-radius:3px;}
+.season-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+.season-card{background:white;border:1px solid var(--border);border-radius:14px;padding:12px;}
+.season-card-header{font-size:12px;font-weight:900;color:var(--earth);margin-bottom:6px;}
+.season-card ul{list-style:none;font-size:11px;color:var(--muted);line-height:1.8;}
+.season-card ul li::before{content:'・';color:var(--moss);}
+
+/* edit */
+.edit-panel{background:white;border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 3px 16px rgba(0,0,0,.07);margin-bottom:16px;}
+.edit-section-title{font-size:14px;font-weight:900;color:var(--earth);margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+.edit-zone-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;}
+.edit-zone-card-header{font-size:13px;font-weight:900;color:var(--earth);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.field-row{margin-bottom:10px;}
+.field-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;display:block;}
+.field-input,.field-select,.field-textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;color:var(--text);background:white;outline:none;transition:border-color .2s;}
+.field-input:focus,.field-select:focus,.field-textarea:focus{border-color:var(--moss);box-shadow:0 0 0 3px rgba(74,124,89,.12);}
+.field-textarea{resize:vertical;min-height:60px;line-height:1.6;}
+.field-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.slider-wrap{display:flex;align-items:center;gap:10px;}
+.field-slider{flex:1;accent-color:var(--moss);}
+.slider-val{font-size:12px;font-weight:700;color:var(--moss);min-width:36px;text-align:right;}
+.save-btn{width:100%;padding:14px;background:var(--moss);color:white;border:none;border-radius:12px;font-family:inherit;font-size:15px;font-weight:900;cursor:pointer;margin-top:16px;transition:background .2s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.save-btn:active{background:#3a6347;}
+.save-btn:disabled{background:#9ab8a0;cursor:not-allowed;}
+.add-zone-btn{width:100%;padding:12px;background:transparent;color:var(--moss);border:2px dashed var(--moss-light);border-radius:12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;transition:background .2s;}
+.add-zone-btn:active{background:var(--moss-pale);}
+.delete-zone-btn{padding:5px 10px;background:transparent;color:#c0453a;border:1px solid #e08880;border-radius:8px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--moss);color:white;padding:12px 24px;border-radius:20px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:transform .3s ease;z-index:200;white-space:nowrap;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.error{background:var(--harvest);}
+.toast.warn{background:var(--straw);}
+
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-end;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:white;border-radius:24px 24px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .25s ease;}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.modal-handle{width:40px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 18px;}
+.modal-title{font-size:18px;font-weight:900;color:var(--earth);margin-bottom:14px;}
+.modal-row{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;}
+.modal-label{font-size:11px;font-weight:700;color:var(--muted);min-width:70px;padding-top:2px;}
+.modal-val{font-size:13px;color:var(--text);flex:1;line-height:1.6;}
+.modal-close{width:100%;padding:13px;background:var(--moss);color:white;border:none;border-radius:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:18px;}
+
+.loading-overlay{position:fixed;inset:0;background:rgba(244,240,232,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300;gap:12px;}
+.loading-spinner{width:40px;height:40px;border:4px solid var(--moss-pale);border-top-color:var(--moss);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:14px;font-weight:700;color:var(--moss);}
+
+.sync-indicator{position:fixed;top:12px;right:12px;background:white;border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(0,0,0,.08);z-index:50;opacity:0;transition:opacity .4s;}
+.sync-indicator.show{opacity:1;}
+.sync-indicator .si-dot{width:7px;height:7px;border-radius:50%;background:var(--moss);}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">🌿 農園データを読み込み中...</div>
+</div>
+
+<div class="sync-indicator" id="sync-ind">
+  <div class="si-dot"></div><span id="sync-ind-text">同期中...</span>
+</div>
+
+<div class="header">
+  <div class="header-badge">🌿 未来農園</div>
+  <h1>農園ダッシュボード</h1>
+  <div class="meta-row">
+    <span class="meta-badge badge-update">📅 最終更新：<span id="last-update-label">―</span></span>
+    <span class="meta-badge badge-sync"><span class="sync-dot"></span>30秒ごとに自動同期</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('map',this)"><span class="tab-icon">🗺️</span>農園マップ</button>
+  <button class="tab" onclick="switchTab('calendar',this)"><span class="tab-icon">📅</span>カレンダー</button>
+  <button class="tab" onclick="switchTab('edit',this)"><span class="tab-icon">✏️</span>編集</button>
+</div>
+
+<!-- 農園マップ -->
+<div class="panel active" id="panel-map">
+  <div class="map-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#ffc107"></div>作業中</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#28a745"></div>安定中</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc3545"></div>要対応</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#17a2b8"></div>準備中</div>
+  </div>
+  <div class="farm-map">
+    <div class="map-title">🏡 農園エリア一覧 <span style="font-size:11px;color:var(--muted);font-weight:400">タップで詳細</span></div>
+    <div class="farm-grid" id="farm-grid"></div>
+  </div>
+</div>
+
+<!-- カレンダー -->
+<div class="panel" id="panel-calendar">
+  <div class="calendar-wrap">
+    <div class="calendar-title">📅 年間栽培カレンダー</div>
+    <div class="gantt">
+      <div class="gantt-header" id="gantt-header"></div>
+      <div id="gantt-body"></div>
+      <div class="gantt-legend">
+        <div class="gantt-legend-item"><div class="gantt-legend-bar" style="background:#c8e6c9"></div>育苗・準備</div>
+        <div class="gantt-legend-item"><div class="gantt-legend-bar" style="background:#43a047"></div>生育中</div>
+        <div class="gantt-legend-item"><div class="gantt-legend-bar" style="background:#e53935"></div>収穫期</div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size:13px;font-weight:900;color:var(--earth);margin-bottom:10px;">📌 季節の段取りポイント</div>
+  <div class="season-cards">
+    <div class="season-card"><div class="season-card-header">🌸 春（3〜5月）</div><ul><li>夏野菜の育苗</li><li>田んぼの苗床準備</li><li>畑の土作り</li><li>5月に田植え</li></ul></div>
+    <div class="season-card"><div class="season-card-header">☀️ 夏（6〜8月）</div><ul><li>夏野菜の収穫</li><li>田んぼの草刈り</li><li>秋野菜の準備開始</li><li>水管理が重要</li></ul></div>
+    <div class="season-card"><div class="season-card-header">🍁 秋（9〜11月）</div><ul><li>稲刈り・脱穀</li><li>秋冬野菜の定植</li><li>来年の計画づくり</li></ul></div>
+    <div class="season-card"><div class="season-card-header">❄️ 冬（12〜2月）</div><ul><li>冬野菜の収穫</li><li>田んぼの休耕管理</li><li>農具のメンテ</li></ul></div>
+  </div>
+</div>
+
+<!-- 編集 -->
+<div class="panel" id="panel-edit">
+  <!-- Undo/Redo バー -->
+  <div class="history-bar">
+    <div class="history-bar-label">📜 編集履歴</div>
+    <div class="history-count" id="history-count">0 / 0</div>
+    <button class="hbtn undo" id="btn-undo" onclick="undo()" disabled>↩ 戻る</button>
+    <button class="hbtn redo" id="btn-redo" onclick="redo()" disabled>進む ↪</button>
+    <button class="hbtn" onclick="toggleHistoryDrawer()" style="font-size:14px;padding:7px 10px;">🕐</button>
+  </div>
+  <!-- 履歴ドロワー -->
+  <div class="history-drawer" id="history-drawer">
+    <div class="history-drawer-title">🕐 保存履歴（タップで復元）</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+
+  <div class="edit-panel">
+    <div class="edit-section-title">✏️ エリアの編集</div>
+    <div id="edit-zones"></div>
+    <button class="add-zone-btn" onclick="addZone()">＋ エリアを追加する</button>
+    <button class="save-btn" id="save-btn" onclick="saveData()">💾 保存して全員に反映する</button>
+  </div>
+  <div class="edit-panel">
+    <div class="edit-section-title">📅 栽培カレンダーの編集</div>
+    <div id="edit-crops"></div>
+    <button class="add-zone-btn" onclick="addCrop()">＋ 作物を追加する</button>
+    <button class="save-btn" onclick="saveData()">💾 保存して全員に反映する</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div id="modal-body"></div>
+    <button class="modal-close" onclick="closeModal()">閉じる</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY   = 'mirai-farm-shared-v1';
+const HISTORY_KEY   = 'mirai-farm-history-v1';
+const MAX_HISTORY   = 20;
+
+const DEFAULT_DATA = {
+  lastUpdate:'2025/5/27',
+  zones:[
+    {id:'z1',emoji:'🌾',name:'田んぼA',status:'working',crops:'コシヒカリ',situation:'田植え完了・活着中',nextTask:'草刈り（6/5までに）',assignee:'〇〇さん',memo:'水位チェック毎朝必要',progress:35,bgColor:'#e8f4ea',borderColor:'#7ab893',fillColor:'linear-gradient(90deg,#4a7c59,#7ab893)'},
+    {id:'z2',emoji:'🥬',name:'畑B（夏野菜）',status:'working',crops:'トマト・きゅうり・なす',situation:'定植済み・活着中',nextTask:'追肥（今週中）',assignee:'〇〇さん',memo:'トマトの活着が早い',progress:25,bgColor:'#fdf5e4',borderColor:'#e8c070',fillColor:'linear-gradient(90deg,#c8973a,#e8b860)'},
+    {id:'z3',emoji:'🌿',name:'畑C',status:'prep',crops:'（秋野菜準備中）',situation:'土作り前',nextTask:'石灰まき・土壌改良',assignee:'未定',memo:'8月末〜9月に白菜・大根予定',progress:10,bgColor:'#e8f2f8',borderColor:'#5b8fa8',fillColor:'linear-gradient(90deg,#5b8fa8,#7aafc8)'},
+    {id:'z4',emoji:'🐔',name:'鶏舎エリア',status:'ok',crops:'産卵鶏 12羽',situation:'産卵期・安定',nextTask:'毎日卵回収',assignee:'〇〇さん',memo:'飼料・水は毎日チェック',progress:80,bgColor:'#fef0ee',borderColor:'#e08880',fillColor:'linear-gradient(90deg,#c0453a,#e06060)'}
+  ],
+  crops:[
+    {id:'c1',emoji:'🍅',name:'トマト',category:'夏野菜',months:[0,0,1,2,2,2,3,3,0,0,0,0]},
+    {id:'c2',emoji:'🥒',name:'きゅうり',category:'夏野菜',months:[0,0,0,1,2,2,3,3,0,0,0,0]},
+    {id:'c3',emoji:'🍆',name:'なす',category:'夏野菜',months:[0,0,1,2,2,2,3,3,3,0,0,0]},
+    {id:'c4',emoji:'🌾',name:'お米',category:'田んぼ',months:[0,0,1,1,2,2,2,2,3,3,0,0]},
+    {id:'c5',emoji:'🥬',name:'白菜',category:'秋冬野菜',months:[3,0,0,0,0,0,0,1,2,2,2,3]},
+    {id:'c6',emoji:'🌿',name:'大根',category:'秋冬野菜',months:[3,0,0,0,0,0,0,1,2,3,3,3]}
+  ]
+};
+
+const MONTH_COLORS = ['#f5f0e8','#c8e6c9','#43a047','#e53935'];
+const STATUS_MAP = {
+  working:{label:'🟡 作業中',cls:'status-working'},
+  ok:{label:'🟢 安定中',cls:'status-ok'},
+  alert:{label:'🔴 要対応',cls:'status-alert'},
+  prep:{label:'🔵 準備中',cls:'status-prep'}
+};
+
+let farmData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+let syncTimer = null;
+
+// ===== 履歴管理 =====
+// history = [{label, time, data}, ...]  古い→新しい順
+// historyPtr = 現在地インデックス（-1 = まだなし）
+let history = [];
+let historyPtr = -1;
+
+function cloneData(d){ return JSON.parse(JSON.stringify(d)); }
+
+function pushHistory(label){
+  // ptr より後ろの未来を捨てる
+  if(historyPtr < history.length - 1){
+    history = history.slice(0, historyPtr + 1);
+  }
+  history.push({ label, time: fmtDate(new Date()), data: cloneData(farmData) });
+  if(history.length > MAX_HISTORY) history.shift();
+  historyPtr = history.length - 1;
+  updateHistoryUI();
+}
+
+function undo(){
+  if(historyPtr <= 0){ showToast('⚠️ これ以上戻れません', 'warn'); return; }
+  historyPtr--;
+  farmData = cloneData(history[historyPtr].data);
+  renderAll();
+  updateHistoryUI();
+  showToast(`↩ 「${history[historyPtr+1].label}」を取り消しました`);
+}
+
+function redo(){
+  if(historyPtr >= history.length - 1){ showToast('⚠️ これ以上進めません', 'warn'); return; }
+  historyPtr++;
+  farmData = cloneData(history[historyPtr].data);
+  renderAll();
+  updateHistoryUI();
+  showToast(`↪ 「${history[historyPtr].label}」を再適用しました`);
+}
+
+function jumpToHistory(idx){
+  if(idx < 0 || idx >= history.length) return;
+  historyPtr = idx;
+  farmData = cloneData(history[idx].data);
+  renderAll();
+  updateHistoryUI();
+  showToast(`🕐 「${history[idx].label}」に復元しました`);
+}
+
+function updateHistoryUI(){
+  const undoBtn = document.getElementById('btn-undo');
+  const redoBtn = document.getElementById('btn-redo');
+  const countEl = document.getElementById('history-count');
+  undoBtn.disabled = historyPtr <= 0;
+  redoBtn.disabled = historyPtr >= history.length - 1;
+  countEl.textContent = history.length === 0 ? '0 / 0' : `${historyPtr + 1} / ${history.length}`;
+  renderHistoryList();
+}
+
+function renderHistoryList(){
+  const list = document.getElementById('history-list');
+  if(history.length === 0){
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:16px">まだ保存履歴がありません</div>';
+    return;
+  }
+  // 新しい順に表示
+  list.innerHTML = [...history].reverse().map((h, ri) => {
+    const idx = history.length - 1 - ri;
+    const isCurrent = idx === historyPtr;
+    const isFuture  = idx > historyPtr;
+    return `<div class="history-item${isCurrent?' current':''}${isFuture?' future':''}" onclick="jumpToHistory(${idx})">
+      <span class="history-item-icon">${isCurrent ? '✅' : isFuture ? '⏩' : '↩'}</span>
+      <span class="history-item-label">${h.label}</span>
+      <span class="history-item-time">${h.time}</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleHistoryDrawer(){
+  document.getElementById('history-drawer').classList.toggle('open');
+}
+
+// ===== 共有ストレージ =====
+async function loadFromShared(){
+  try {
+    const res = await window.storage.get(STORAGE_KEY, true);
+    if(res && res.value){ farmData = JSON.parse(res.value); return true; }
+  } catch(e){}
+  return false;
+}
+async function saveToShared(){
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = '⏳ 保存中...';
+  try {
+    // 保存前に編集内容を収集
+    collectEdits();
+    farmData.lastUpdate = fmtDate(new Date());
+    const res = await window.storage.set(STORAGE_KEY, JSON.stringify(farmData), true);
+    if(res){
+      pushHistory('保存：' + farmData.lastUpdate);
+      renderAll();
+      showToast('✅ 保存して全員に反映しました！');
+    } else { showToast('❌ 保存に失敗しました','error'); }
+  } catch(e){ showToast('❌ 保存エラー：'+e.message,'error'); }
+  btn.disabled = false;
+  btn.innerHTML = '💾 保存して全員に反映する';
+}
+
+function startAutoSync(){
+  if(syncTimer) clearInterval(syncTimer);
+  syncTimer = setInterval(async () => {
+    const activeTab = document.querySelector('.tab.active')?.textContent || '';
+    if(activeTab.includes('編集')) return;
+    await autoSync();
+  }, 30000);
+}
+async function autoSync(){
+  showSyncIndicator('🔄 同期中...');
+  try {
+    const res = await window.storage.get(STORAGE_KEY, true);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
+      if(parsed.lastUpdate !== farmData.lastUpdate){
+        farmData = parsed;
+        renderMap(); renderCalendar();
+        showSyncIndicator('✅ 更新されました');
+        showToast('🔄 農園データが更新されました！');
+      } else { showSyncIndicator('✅ 最新の状態です'); }
+    }
+  } catch(e){ showSyncIndicator('⚠️ 同期エラー'); }
+  setTimeout(hideSyncIndicator, 2000);
+}
+function showSyncIndicator(t){ document.getElementById('sync-ind-text').textContent=t; document.getElementById('sync-ind').classList.add('show'); }
+function hideSyncIndicator(){ document.getElementById('sync-ind').classList.remove('show'); }
+
+function fmtDate(d){
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// ===== 描画 =====
+function renderMap(){
+  const grid = document.getElementById('farm-grid'); grid.innerHTML='';
+  farmData.zones.forEach(z => {
+    const st = STATUS_MAP[z.status]||STATUS_MAP.working;
+    const tags = z.crops.split('・').map(c=>`<span class="crop-tag">${c.trim()}</span>`).join('');
+    const div = document.createElement('div');
+    div.className='farm-zone';
+    div.style.cssText=`background:${z.bgColor};border-color:${z.borderColor};`;
+    div.innerHTML=`
+      <div class="zone-header"><div class="zone-name">${z.emoji} ${z.name}</div><span class="status-badge ${st.cls}">${st.label}</span></div>
+      <div class="zone-crops">${tags}</div>
+      <div class="zone-next"><strong>次：</strong>${z.nextTask}</div>
+      <div class="growth-bar"><div class="growth-fill" style="width:${z.progress}%;background:${z.fillColor}"></div></div>
+      <div class="growth-label"><span>定植</span><span>生育中</span><span>収穫</span></div>`;
+    div.onclick=()=>openModal(z);
+    grid.appendChild(div);
+  });
+}
+function renderCalendar(){
+  const cur = new Date().getMonth();
+  document.getElementById('gantt-header').innerHTML =
+    `<div class="gantt-month"></div>` +
+    ['1','2','3','4','5','6','7','8','9','10','11','12'].map((m,i)=>
+      `<div class="gantt-month${i===cur?' current':''}">${m}</div>`).join('');
+  const cats={};
+  farmData.crops.forEach(c=>{ if(!cats[c.category]) cats[c.category]=[]; cats[c.category].push(c); });
+  const body=document.getElementById('gantt-body'); body.innerHTML='';
+  Object.entries(cats).forEach(([cat,crops])=>{
+    const l=document.createElement('div'); l.className='section-label'; l.textContent=cat; body.appendChild(l);
+    crops.forEach(c=>{
+      const row=document.createElement('div'); row.className='gantt-row';
+      row.innerHTML=`<div class="gantt-label">${c.emoji} ${c.name}</div>`+
+        c.months.map(m=>`<div class="gantt-cell" style="background:${MONTH_COLORS[m]}"></div>`).join('');
+      body.appendChild(row);
+    });
+  });
+}
+function renderEditZones(){
+  const c=document.getElementById('edit-zones'); c.innerHTML='';
+  farmData.zones.forEach(z=>{
+    const card=document.createElement('div'); card.className='edit-zone-card';
+    card.innerHTML=`
+      <div class="edit-zone-card-header">${z.emoji} ${z.name}<button class="delete-zone-btn" onclick="deleteZone('${z.id}')">削除</button></div>
+      <div class="field-row-2">
+        <div class="field-row"><label class="field-label">絵文字</label><input class="field-input" data-id="${z.id}" data-field="emoji" value="${z.emoji}"></div>
+        <div class="field-row"><label class="field-label">エリア名</label><input class="field-input" data-id="${z.id}" data-field="name" value="${z.name}"></div>
+      </div>
+      <div class="field-row"><label class="field-label">状態</label>
+        <select class="field-select" data-id="${z.id}" data-field="status">
+          <option value="working" ${z.status==='working'?'selected':''}>🟡 作業中</option>
+          <option value="ok" ${z.status==='ok'?'selected':''}>🟢 安定中</option>
+          <option value="alert" ${z.status==='alert'?'selected':''}>🔴 要対応</option>
+          <option value="prep" ${z.status==='prep'?'selected':''}>🔵 準備中</option>
+        </select></div>
+      <div class="field-row"><label class="field-label">植えてるもの（・区切り）</label><input class="field-input" data-id="${z.id}" data-field="crops" value="${z.crops}"></div>
+      <div class="field-row"><label class="field-label">現在の状況</label><input class="field-input" data-id="${z.id}" data-field="situation" value="${z.situation}"></div>
+      <div class="field-row"><label class="field-label">次の作業</label><input class="field-input" data-id="${z.id}" data-field="nextTask" value="${z.nextTask}"></div>
+      <div class="field-row-2">
+        <div class="field-row"><label class="field-label">担当</label><input class="field-input" data-id="${z.id}" data-field="assignee" value="${z.assignee}"></div>
+        <div class="field-row"><label class="field-label">進捗</label>
+          <div class="slider-wrap">
+            <input type="range" class="field-slider" min="0" max="100" value="${z.progress}" data-id="${z.id}" data-field="progress" oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span class="slider-val">${z.progress}%</span>
+          </div></div>
+      </div>
+      <div class="field-row"><label class="field-label">備考・メモ</label><textarea class="field-textarea" data-id="${z.id}" data-field="memo">${z.memo}</textarea></div>`;
+    c.appendChild(card);
+  });
+}
+function renderEditCrops(){
+  const c=document.getElementById('edit-crops'); c.innerHTML='';
+  farmData.crops.forEach(cr=>{
+    const mi=cr.months.map((m,i)=>`
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">${i+1}月</div>
+        <select style="width:100%;font-size:11px;padding:3px;border:1px solid var(--border);border-radius:6px;background:white;" data-id="${cr.id}" data-field="month" data-month="${i}">
+          <option value="0" ${m===0?'selected':''}>―</option><option value="1" ${m===1?'selected':''}>準</option>
+          <option value="2" ${m===2?'selected':''}>育</option><option value="3" ${m===3?'selected':''}>収</option>
+        </select></div>`).join('');
+    const card=document.createElement('div'); card.className='edit-zone-card';
+    card.innerHTML=`
+      <div class="edit-zone-card-header">${cr.emoji} ${cr.name}<button class="delete-zone-btn" onclick="deleteCrop('${cr.id}')">削除</button></div>
+      <div class="field-row-2">
+        <div class="field-row"><label class="field-label">絵文字</label><input class="field-input" data-id="${cr.id}" data-field="cropEmoji" value="${cr.emoji}"></div>
+        <div class="field-row"><label class="field-label">作物名</label><input class="field-input" data-id="${cr.id}" data-field="cropName" value="${cr.name}"></div>
+      </div>
+      <div class="field-row"><label class="field-label">カテゴリ</label><input class="field-input" data-id="${cr.id}" data-field="category" value="${cr.category}"></div>
+      <div class="field-row"><label class="field-label">月別スケジュール</label>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px;margin-top:6px">${mi}</div></div>`;
+    c.appendChild(card);
+  });
+}
+function renderAll(){
+  document.getElementById('last-update-label').textContent = farmData.lastUpdate||'―';
+  renderMap(); renderCalendar(); renderEditZones(); renderEditCrops();
+  updateHistoryUI();
+}
+
+// ===== 保存 =====
+function collectEdits(){
+  document.querySelectorAll('[data-field]').forEach(el=>{
+    const id=el.dataset.id, field=el.dataset.field;
+    const zone=farmData.zones.find(z=>z.id===id);
+    if(zone){
+      if(field==='progress') zone[field]=parseInt(el.value);
+      else if(['emoji','name','status','crops','situation','nextTask','assignee','memo'].includes(field)) zone[field]=el.value;
+    }
+    const crop=farmData.crops.find(c=>c.id===id);
+    if(crop){
+      if(field==='cropEmoji') crop.emoji=el.value;
+      else if(field==='cropName') crop.name=el.value;
+      else if(field==='category') crop.category=el.value;
+      else if(field==='month') crop.months[parseInt(el.dataset.month)]=parseInt(el.value);
+    }
+  });
+}
+async function saveData(){ await saveToShared(); }
+
+// ===== エリア・作物 =====
+function addZone(){
+  collectEdits();
+  farmData.zones.push({id:'z'+Date.now(),emoji:'🌱',name:'新しいエリア',status:'prep',crops:'未定',situation:'準備中',nextTask:'未定',assignee:'未定',memo:'',progress:0,bgColor:'#f0f4ec',borderColor:'#9ab893',fillColor:'linear-gradient(90deg,#6a9a70,#9ab893)'});
+  renderEditZones();
+}
+function deleteZone(id){
+  if(!confirm('このエリアを削除しますか？')) return;
+  collectEdits();
+  farmData.zones=farmData.zones.filter(z=>z.id!==id);
+  renderEditZones();
+}
+function addCrop(){
+  collectEdits();
+  farmData.crops.push({id:'c'+Date.now(),emoji:'🌱',name:'新しい作物',category:'その他',months:[0,0,0,0,0,0,0,0,0,0,0,0]});
+  renderEditCrops();
+}
+function deleteCrop(id){
+  if(!confirm('この作物を削除しますか？')) return;
+  collectEdits();
+  farmData.crops=farmData.crops.filter(c=>c.id!==id);
+  renderEditCrops();
+}
+
+// ===== モーダル =====
+function openModal(z){
+  document.getElementById('modal-title').textContent=`${z.emoji} ${z.name}`;
+  const rows=[['状態',STATUS_MAP[z.status]?.label||z.status],['植えてるもの',z.crops],['現在の状況',z.situation],['次の作業',z.nextTask],['担当',z.assignee],['備考',z.memo]];
+  document.getElementById('modal-body').innerHTML=rows.filter(r=>r[1]).map(([l,v])=>
+    `<div class="modal-row"><div class="modal-label">${l}</div><div class="modal-val">${v}</div></div>`).join('');
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(e){ if(!e||e.target===document.getElementById('modal')) document.getElementById('modal').classList.remove('open'); }
+
+// ===== タブ =====
+function switchTab(id,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ===== トースト =====
+function showToast(msg, type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast'+(type?' '+type:'');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ===== 初期化 =====
+(async()=>{
+  await loadFromShared();
+  renderAll();
+  // 初期状態を履歴に積む
+  pushHistory('読み込み時のデータ');
+  document.getElementById('loading').style.display='none';
+  startAutoSync();
+})();
+</script>
+</body>
+</html>
